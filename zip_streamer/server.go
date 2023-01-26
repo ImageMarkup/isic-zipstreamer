@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/google/uuid"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -29,8 +31,16 @@ func NewServer() *Server {
 		linkCache:   NewLinkCache(&timeout),
 		Compression: false,
 	}
+	if err := sentry.Init(sentry.ClientOptions{
+		EnableTracing: true,
+		TracesSampleRate: 1.0,
+	}); err != nil {
+		fmt.Printf("Sentry initialization failed: %v\n", err)
+	}
 
-	r.HandleFunc("/download", server.HandleGetDownload).Methods("GET")
+	sentryHandler := sentryhttp.New(sentryhttp.Options{})
+
+	r.HandleFunc("/download", sentryHandler.HandleFunc(server.HandleGetDownload)).Methods("GET")
 
 	return &server
 }
@@ -78,7 +88,7 @@ func (s *Server) HandlePostDownload(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.streamEntries(zipDescriptor, w)
+	s.streamEntries(zipDescriptor, w, req)
 }
 
 func (s *Server) HandleGetDownload(w http.ResponseWriter, req *http.Request) {
@@ -101,7 +111,7 @@ func (s *Server) HandleGetDownload(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.streamEntries(zipDescriptor, w)
+	s.streamEntries(zipDescriptor, w, req)
 }
 
 func retrieveZipDescriptorFromUrl(listfileUrl string) (*ZipDescriptor, error) {
@@ -130,10 +140,10 @@ func (s *Server) HandleDownloadLink(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	s.streamEntries(zipDescriptor, w)
+	s.streamEntries(zipDescriptor, w, req)
 }
 
-func (s *Server) streamEntries(zipDescriptor *ZipDescriptor, w http.ResponseWriter) {
+func (s *Server) streamEntries(zipDescriptor *ZipDescriptor, w http.ResponseWriter, req *http.Request) {
 	zipStreamer, err := NewZipStream(zipDescriptor.Files(), w)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -149,7 +159,7 @@ func (s *Server) streamEntries(zipDescriptor *ZipDescriptor, w http.ResponseWrit
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", zipDescriptor.EscapedSuggestedFilename()))
 	w.WriteHeader(http.StatusOK)
-	err = zipStreamer.StreamAllFiles()
+	err = zipStreamer.StreamAllFiles(req)
 
 	if err != nil {
 		// Close the connection so the client gets an error instead of 200 but invalid file

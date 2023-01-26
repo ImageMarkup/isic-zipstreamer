@@ -3,9 +3,12 @@ package zip_streamer
 import (
 	"archive/zip"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 )
 
 type ZipStream struct {
@@ -29,17 +32,27 @@ func NewZipStream(entries []*FileEntry, w io.Writer) (*ZipStream, error) {
 	return &z, nil
 }
 
-func (z *ZipStream) StreamAllFiles() error {
+func (z *ZipStream) StreamAllFiles(req *http.Request) error {
+	hub := sentry.GetHubFromContext(req.Context())
+
 	zipWriter := zip.NewWriter(z.destination)
 	success := 0
 
 	for _, entry := range z.entries {
 		resp, err := http.Get(entry.Url().String())
 		if err != nil {
+			if hub != nil {
+				hub.CaptureException(err)
+			}
+			// TODO continue?
 			continue
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
+			if hub != nil {
+				hub.CaptureMessage(fmt.Sprintf("Received status %d for URL %s", resp.StatusCode, entry.Url().String()))
+			}
+			// TODO continue?
 			continue
 		}
 
