@@ -30,10 +30,7 @@ func NewServer() *Server {
 		Compression: false,
 	}
 
-	r.HandleFunc("/download", server.HandlePostDownload).Methods("POST")
 	r.HandleFunc("/download", server.HandleGetDownload).Methods("GET")
-	r.HandleFunc("/create_download_link", server.HandleCreateLink).Methods("POST")
-	r.HandleFunc("/download_link/{link_id}", server.HandleDownloadLink).Methods("GET")
 
 	return &server
 }
