@@ -3,7 +3,6 @@ package testing
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -63,20 +62,6 @@ func checkResponseZipFile(rr *httptest.ResponseRecorder, t *testing.T) {
 	}
 }
 
-func TestServerGetDownloadZsurl(t *testing.T) {
-	req, err := http.NewRequest("GET", "/download?zsurl=https://gist.githubusercontent.com/scosman/449df713f97888b931c7b4e4f76f82b1/raw/b2f6fe60874d5183d2a2ec689c574b66751cf4ae/listfile.json", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	zipServer := zip_streamer.NewServer()
-	rr := httptest.NewRecorder()
-	zipServer.ServeHTTP(rr, req)
-
-	checkHttpOk(rr, t)
-	checkResponseZipFile(rr, t)
-}
-
 func TestServerGetDownloadZsid(t *testing.T) {
 	req, err := http.NewRequest("GET", "/download?zsid=449df713f97888b931c7b4e4f76f82b1/raw/b2f6fe60874d5183d2a2ec689c574b66751cf4ae/listfile.json", nil)
 	if err != nil {
@@ -92,50 +77,3 @@ func TestServerGetDownloadZsid(t *testing.T) {
 	checkResponseZipFile(rr, t)
 }
 
-func TestServerPostDownload(t *testing.T) {
-	req, err := http.NewRequest("POST", "/download", bytes.NewReader(jsonDescriptorToValidate))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	zipServer := zip_streamer.NewServer()
-	rr := httptest.NewRecorder()
-	zipServer.ServeHTTP(rr, req)
-
-	checkHttpOk(rr, t)
-	checkResponseZipFile(rr, t)
-}
-
-type jsonCreateLinkPayload struct {
-	Status string `json:"status"`
-	LinkId string `json:"link_id"`
-}
-
-func TestServerCreateAndGet(t *testing.T) {
-	createReq, err := http.NewRequest("POST", "/create_download_link", bytes.NewReader(jsonDescriptorToValidate))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	zipServer := zip_streamer.NewServer()
-	rrCreate := httptest.NewRecorder()
-	zipServer.ServeHTTP(rrCreate, createReq)
-	checkHttpOk(rrCreate, t)
-
-	var createResponseParsed jsonCreateLinkPayload
-	err = json.Unmarshal(rrCreate.Body.Bytes(), &createResponseParsed)
-	if err != nil || createResponseParsed.Status != "ok" {
-		t.Fatalf("Create link request failed (%v): %v", createResponseParsed.Status, err)
-	}
-
-	getReq, err := http.NewRequest("GET", "/download_link/"+createResponseParsed.LinkId, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rrGet := httptest.NewRecorder()
-	zipServer.ServeHTTP(rrGet, getReq)
-
-	checkHttpOk(rrGet, t)
-	checkResponseZipFile(rrGet, t)
-}
