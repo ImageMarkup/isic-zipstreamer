@@ -2,6 +2,7 @@ package zip_streamer
 
 import (
 	"archive/zip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -32,8 +33,8 @@ func NewZipStream(entries []*FileEntry, w io.Writer) (*ZipStream, error) {
 	return &z, nil
 }
 
-func (z *ZipStream) StreamAllFiles(req *http.Request) error {
-	hub := sentry.GetHubFromContext(req.Context())
+func (z *ZipStream) StreamAllFiles(context context.Context) error {
+	hub := sentry.GetHubFromContext(context)
 
 	zipWriter := zip.NewWriter(z.destination)
 	success := 0

@@ -159,7 +159,7 @@ func (s *Server) streamEntries(zipDescriptor *ZipDescriptor, w http.ResponseWrit
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", zipDescriptor.EscapedSuggestedFilename()))
 	w.WriteHeader(http.StatusOK)
-	err = zipStreamer.StreamAllFiles(req)
+	err = zipStreamer.StreamAllFiles(req.Context())
 
 	if err != nil {
 		// Close the connection so the client gets an error instead of 200 but invalid file

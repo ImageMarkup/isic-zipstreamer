@@ -1,6 +1,7 @@
 package testing
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -37,7 +38,7 @@ func TestWriteZip(t *testing.T) {
 	if err != nil || z == nil {
 		t.Fatal("constructor failed")
 	}
-	err = z.StreamAllFiles()
+	err = z.StreamAllFiles(context.TODO())
 	if err != nil {
 		t.Fatalf("issue writing zip: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestWriteZipWithSomeInvalid(t *testing.T) {
 	if err != nil || z == nil {
 		t.Fatal("constructor failed")
 	}
-	err = z.StreamAllFiles()
+	err = z.StreamAllFiles(context.TODO())
 	if err != nil {
 		t.Fatalf("issue writing zip: %v", err)
 	}
@@ -77,7 +78,7 @@ func TestWriteZipWithAllInvalid(t *testing.T) {
 	if err != nil || z == nil {
 		t.Fatal("constructor failed")
 	}
-	err = z.StreamAllFiles()
+	err = z.StreamAllFiles(context.TODO())
 	if err == nil {
 		t.Fatalf("empty zip didn't error")
 	}
