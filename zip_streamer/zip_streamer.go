@@ -12,6 +12,8 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
+const NUM_RETRIES = 3
+
 type ZipStream struct {
 	entries           []*FileEntry
 	destination       io.Writer
@@ -33,6 +35,23 @@ func NewZipStream(entries []*FileEntry, w io.Writer) (*ZipStream, error) {
 	return &z, nil
 }
 
+// TODO: consider using https://github.com/hashicorp/go-retryablehttp
+func retryableGet(url string) (*http.Response, error) {
+	var err error
+
+	for i := 0; i < NUM_RETRIES; i++ {
+		resp, err := http.Get(url)
+		if err != nil {
+			time.Sleep(1)
+			continue
+		} else {
+			return resp, nil
+		}
+	}
+
+	return nil, err
+}
+
 func (z *ZipStream) StreamAllFiles(context context.Context) error {
 	hub := sentry.GetHubFromContext(context)
 
@@ -40,7 +59,7 @@ func (z *ZipStream) StreamAllFiles(context context.Context) error {
 	success := 0
 
 	for _, entry := range z.entries {
-		resp, err := http.Get(entry.Url().String())
+		resp, err := retryableGet(entry.Url().String())
 		if err != nil {
 			if hub != nil {
 				hub.CaptureException(err)

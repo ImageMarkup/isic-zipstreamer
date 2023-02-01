@@ -32,7 +32,7 @@ func NewServer() *Server {
 		Compression: false,
 	}
 	if err := sentry.Init(sentry.ClientOptions{
-		EnableTracing: true,
+		EnableTracing:    true,
 		TracesSampleRate: 1.0,
 	}); err != nil {
 		fmt.Printf("Sentry initialization failed: %v\n", err)

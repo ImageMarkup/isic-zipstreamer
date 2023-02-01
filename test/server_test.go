@@ -76,4 +76,3 @@ func TestServerGetDownloadZsid(t *testing.T) {
 	checkHttpOk(rr, t)
 	checkResponseZipFile(rr, t)
 }
-
