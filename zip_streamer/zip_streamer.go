@@ -12,7 +12,7 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
-const NUM_RETRIES = 3
+const NUM_RETRIES = 8
 
 type ZipStream struct {
 	entries           chan *FileEntry
