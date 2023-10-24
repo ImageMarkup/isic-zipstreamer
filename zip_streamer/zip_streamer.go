@@ -6,13 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 )
 
-const NUM_RETRIES = 8
+const NUM_RETRIES = 6
 
 type ZipStream struct {
 	entries           chan *FileEntry
@@ -38,7 +39,7 @@ func retryableGet(url string) (*http.Response, error) {
 	for i := 0; i < NUM_RETRIES; i++ {
 		resp, err := http.Get(url)
 		if err != nil {
-			time.Sleep(1)
+			time.Sleep(time.Duration(math.Min(math.Pow(float64(2), float64(i)), float64(30))) * time.Second)
 			continue
 		} else {
 			return resp, nil
