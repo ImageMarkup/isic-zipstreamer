@@ -33,7 +33,7 @@ func NewServer() *Server {
 	}
 	if err := sentry.Init(sentry.ClientOptions{
 		EnableTracing:    true,
-		TracesSampleRate: 1.0,
+		TracesSampleRate: .05,
 	}); err != nil {
 		fmt.Printf("Sentry initialization failed: %v\n", err)
 	}
