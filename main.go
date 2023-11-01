@@ -16,6 +16,11 @@ func main() {
 	zipServer := zip_streamer.NewServer()
 	zipServer.Compression = (os.Getenv("ZS_COMPRESSION") == "DEFLATE")
 	zipServer.ListfileUrlPrefix = os.Getenv("ZS_LISTFILE_URL_PREFIX")
+	zipServer.ListfileBasicAuth = os.Getenv("ZS_LISTFILE_BASIC_AUTH")
+
+	if zipServer.ListfileBasicAuth == "" {
+		log.Fatalf("ZS_LISTFILE_BASIC_AUTH must be set")
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {

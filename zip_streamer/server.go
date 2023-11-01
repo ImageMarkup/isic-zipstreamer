@@ -20,6 +20,7 @@ type Server struct {
 	linkCache         LinkCache
 	Compression       bool
 	ListfileUrlPrefix string
+	ListfileBasicAuth string
 }
 
 func NewServer() *Server {
@@ -107,7 +108,7 @@ func (s *Server) HandleGetDownload(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	zipDescriptor, err := retrieveZipDescriptorFromUrl(listfileUrl)
+	zipDescriptor, err := retrieveZipDescriptorFromUrl(listfileUrl, s.ListfileBasicAuth)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(`{"status":"error","error":"file not found"}`))
@@ -117,8 +118,13 @@ func (s *Server) HandleGetDownload(w http.ResponseWriter, req *http.Request) {
 	s.streamEntries(zipDescriptor, w, req)
 }
 
-func retrieveZipDescriptorFromUrl(listfileUrl string) (*ZipDescriptor, error) {
-	listfileResp, err := http.Get(listfileUrl)
+func retrieveZipDescriptorFromUrl(listfileUrl string, listfileBasicAuth string) (*ZipDescriptor, error) {
+	req, err := http.NewRequest("GET", listfileUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth("", listfileBasicAuth)
+	listfileResp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
