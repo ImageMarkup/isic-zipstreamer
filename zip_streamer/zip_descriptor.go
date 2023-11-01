@@ -2,19 +2,18 @@ package zip_streamer
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"strings"
 )
 
 type ZipDescriptor struct {
 	suggestedFilenameRaw string
-	files                chan *FileEntry
+	files                []*FileEntry
 }
 
 func NewZipDescriptor() *ZipDescriptor {
 	zd := ZipDescriptor{
 		suggestedFilenameRaw: "",
-		files:                make(chan *FileEntry),
+		files:                make([]*FileEntry, 0),
 	}
 
 	return &zd
@@ -44,7 +43,7 @@ func (zd ZipDescriptor) EscapedSuggestedFilename() string {
 	return "archive.zip"
 }
 
-func (zd ZipDescriptor) Files() chan *FileEntry {
+func (zd ZipDescriptor) Files() []*FileEntry {
 	return zd.files
 }
 
@@ -56,10 +55,9 @@ type jsonZipEntry struct {
 }
 
 type jsonZipPayload struct {
-	Next              *string        `json:"next"`
-	Previous          *string        `json:"previous"`
-	Results           []jsonZipEntry `json:"results"`
+	Files             []jsonZipEntry `json:"files"`
 	DeprecatedEntries []jsonZipEntry `json:"entries"`
+	SuggestedFilename string         `json:"suggestedFilename"`
 }
 
 func UnmarshalJsonZipDescriptor(payload []byte) (*ZipDescriptor, error) {
@@ -70,59 +68,30 @@ func UnmarshalJsonZipDescriptor(payload []byte) (*ZipDescriptor, error) {
 	}
 
 	zd := NewZipDescriptor()
+	zd.suggestedFilenameRaw = parsed.SuggestedFilename
 
 	// Maintain backwards compatibility when files were named `entries`
-	go func() {
-		for {
-			jsonZipFileList := parsed.Results
-			if len(jsonZipFileList) == 0 {
-				jsonZipFileList = parsed.DeprecatedEntries
-			}
+	jsonZipFileList := parsed.Files
+	if len(jsonZipFileList) == 0 {
+		jsonZipFileList = parsed.DeprecatedEntries
+	}
 
-			for _, jsonZipFileItem := range jsonZipFileList {
-				// Maintain backwards compatibility for non camel case parameters
-				jsonFileItemUrl := jsonZipFileItem.Url
-				if jsonFileItemUrl == "" {
-					jsonFileItemUrl = jsonZipFileItem.DeprecatedCapitalizedUrl
-				}
-				jsonFileItemZipPath := jsonZipFileItem.ZipPath
-				if jsonFileItemZipPath == "" {
-					jsonFileItemZipPath = jsonZipFileItem.DeprecatedCapitalizedZipPath
-				}
-
-				fileEntry, err := NewFileEntry(jsonFileItemUrl, jsonFileItemZipPath)
-				if err == nil {
-					zd.files <- fileEntry
-				}
-			}
-
-			if parsed.Next == nil {
-				break
-			} else {
-				resp, err := retryableGet(*parsed.Next)
-				if err != nil {
-					// TODO: error channel
-					break
-				}
-
-				if resp == nil {
-					break
-				}
-
-				body, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					break
-				}
-				err = json.Unmarshal(body, &parsed)
-				if err != nil {
-					break
-				}
-				resp.Body.Close()
-			}
+	for _, jsonZipFileItem := range jsonZipFileList {
+		// Maintain backwards compatibility for non camel case parameters
+		jsonFileItemUrl := jsonZipFileItem.Url
+		if jsonFileItemUrl == "" {
+			jsonFileItemUrl = jsonZipFileItem.DeprecatedCapitalizedUrl
+		}
+		jsonFileItemZipPath := jsonZipFileItem.ZipPath
+		if jsonFileItemZipPath == "" {
+			jsonFileItemZipPath = jsonZipFileItem.DeprecatedCapitalizedZipPath
 		}
 
-		close(zd.files)
-	}()
+		fileEntry, err := NewFileEntry(jsonFileItemUrl, jsonFileItemZipPath)
+		if err == nil {
+			zd.files = append(zd.files, fileEntry)
+		}
+	}
 
 	return zd, nil
 }

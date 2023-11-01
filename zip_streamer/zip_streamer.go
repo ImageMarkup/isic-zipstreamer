@@ -16,12 +16,16 @@ import (
 const NUM_RETRIES = 6
 
 type ZipStream struct {
-	entries           chan *FileEntry
+	entries           []*FileEntry
 	destination       io.Writer
 	CompressionMethod uint16
 }
 
-func NewZipStream(entries chan *FileEntry, w io.Writer) (*ZipStream, error) {
+func NewZipStream(entries []*FileEntry, w io.Writer) (*ZipStream, error) {
+	if len(entries) == 0 {
+		return nil, errors.New("must have at least 1 entry")
+	}
+
 	z := ZipStream{
 		entries:     entries,
 		destination: w,
@@ -55,7 +59,7 @@ func (z *ZipStream) StreamAllFiles(context context.Context) error {
 	zipWriter := zip.NewWriter(z.destination)
 	success := 0
 
-	for entry := range z.entries {
+	for _, entry := range z.entries {
 		resp, err := retryableGet(entry.Url().String())
 		if err != nil {
 			if hub != nil {
