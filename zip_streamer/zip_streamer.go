@@ -8,12 +8,22 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 )
 
-const NUM_RETRIES = 8
+const NUM_RETRIES = 5
+
+var retryableStatusCodes = []int{
+	http.StatusRequestTimeout,
+	http.StatusTooManyRequests,
+	http.StatusInternalServerError,
+	http.StatusBadGateway,
+	http.StatusServiceUnavailable,
+	http.StatusGatewayTimeout,
+}
 
 type ZipStream struct {
 	entries           []*FileEntry
@@ -36,18 +46,25 @@ func NewZipStream(entries []*FileEntry, w io.Writer) (*ZipStream, error) {
 	return &z, nil
 }
 
-// TODO: consider using https://github.com/hashicorp/go-retryablehttp
 func retryableGet(url string) (*http.Response, error) {
 	var err error
+	var sleepDuration time.Duration
 
 	for i := 0; i < NUM_RETRIES; i++ {
+		sleepDuration = time.Duration(math.Min(math.Pow(float64(2), float64(i)), float64(30))) * time.Second
+
 		resp, err := http.Get(url)
 		if err != nil {
-			time.Sleep(time.Duration(math.Min(math.Pow(float64(2), float64(i)), float64(30))) * time.Second)
-			continue
+			time.Sleep(sleepDuration)
+		} else if slices.Contains(retryableStatusCodes, resp.StatusCode) {
+			time.Sleep(sleepDuration)
 		} else {
 			return resp, nil
 		}
+	}
+
+	if err == nil {
+		err = errors.New("max retries exceeded")
 	}
 
 	return nil, err
@@ -68,13 +85,8 @@ func (z *ZipStream) StreamAllFiles(context context.Context) error {
 				hub.CaptureException(err)
 			}
 			entryFailed = true
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			if hub != nil {
-				hub.CaptureMessage(fmt.Sprintf("Received status %d for URL %s", resp.StatusCode, entry.Url().String()))
-			}
-			entryFailed = true
+		} else {
+			defer resp.Body.Close()
 		}
 
 		header := &zip.FileHeader{
@@ -87,6 +99,10 @@ func (z *ZipStream) StreamAllFiles(context context.Context) error {
 			return err
 		}
 
+		// print entry failed
+		if entryFailed {
+			fmt.Printf("Entry failed: %s\n", entry.Url().String())
+		}
 		// only write a file if it downloaded successfully, otherwise write it as a 0 byte file
 		if !entryFailed {
 			_, err = io.Copy(entryWriter, resp.Body)
