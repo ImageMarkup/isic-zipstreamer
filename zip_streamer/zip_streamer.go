@@ -13,7 +13,7 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
-const NUM_RETRIES = 6
+const NUM_RETRIES = 8
 
 type ZipStream struct {
 	entries           []*FileEntry
