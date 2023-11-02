@@ -60,21 +60,21 @@ func (z *ZipStream) StreamAllFiles(context context.Context) error {
 	success := 0
 
 	for _, entry := range z.entries {
+		entryFailed := false
+
 		resp, err := retryableGet(entry.Url().String())
 		if err != nil {
 			if hub != nil {
 				hub.CaptureException(err)
 			}
-			// TODO continue?
-			continue
+			entryFailed = true
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			if hub != nil {
 				hub.CaptureMessage(fmt.Sprintf("Received status %d for URL %s", resp.StatusCode, entry.Url().String()))
 			}
-			// TODO continue?
-			continue
+			entryFailed = true
 		}
 
 		header := &zip.FileHeader{
@@ -87,9 +87,12 @@ func (z *ZipStream) StreamAllFiles(context context.Context) error {
 			return err
 		}
 
-		_, err = io.Copy(entryWriter, resp.Body)
-		if err != nil {
-			return err
+		// only write a file if it downloaded successfully, otherwise write it as a 0 byte file
+		if !entryFailed {
+			_, err = io.Copy(entryWriter, resp.Body)
+			if err != nil {
+				return err
+			}
 		}
 
 		zipWriter.Flush()
