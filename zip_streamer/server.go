@@ -124,6 +124,7 @@ func retrieveZipDescriptorFromUrl(listfileUrl string, listfileBasicAuth string) 
 		return nil, err
 	}
 	req.SetBasicAuth("", listfileBasicAuth)
+	req.Header.Set("User-Agent", fmt.Sprintf("isic-zipstreamer/%s", getVcsRevision()))
 	listfileResp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err

@@ -53,7 +53,13 @@ func retryableGet(url string) (*http.Response, error) {
 	for i := 0; i < NUM_RETRIES; i++ {
 		sleepDuration = time.Duration(math.Min(math.Pow(float64(2), float64(i)), float64(30))) * time.Second
 
-		resp, err := http.Get(url)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", fmt.Sprintf("isic-zipstreamer/%s", getVcsRevision()))
+		resp, err := http.DefaultClient.Do(req)
+
 		if err != nil {
 			time.Sleep(sleepDuration)
 		} else if slices.Contains(retryableStatusCodes, resp.StatusCode) {
