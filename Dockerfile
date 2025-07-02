@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.19-buster as builder
+FROM golang:1.24-bookworm AS builder
 
 # Create and change to the app directory.
 WORKDIR /go/src/github.com/scosman/zipstreamer
@@ -19,8 +19,8 @@ RUN set -x && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -
 # Copy the binary to the production image from the builder stage.
 COPY --from=builder /go/src/github.com/scosman/zipstreamer/zipstreamer /zipstreamer
 
-# Expose port - shouldn't override PORT env when using docker as server will bind to unexposed port. 
-# Instead map exposed port 4008 to desired port when running. 
+# Expose port - shouldn't override PORT env when using docker as server will bind to unexposed port.
+# Instead map exposed port 4008 to desired port when running.
 # Example to bind to port 80 (assuming image named docker-zs) `docker run -p 127.0.0.1:80:4008/tcp docker-zs`
 ENV PORT=4008
 EXPOSE 4008
