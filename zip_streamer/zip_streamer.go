@@ -2,15 +2,21 @@ package zip_streamer
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net/http"
+	"net/url"
+	"os"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/getsentry/sentry-go"
 )
 
@@ -46,25 +52,89 @@ func NewZipStream(entries []*FileEntry, w io.Writer) (*ZipStream, error) {
 	return &z, nil
 }
 
-func retryableGet(url string) (*http.Response, error) {
+func getS3Object(urlStr string) (*http.Response, error) {
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract bucket name from hostname (bucket.s3.region.amazonaws.com format)
+	host := parsedURL.Host
+	key := strings.TrimPrefix(parsedURL.Path, "/")
+	
+	parts := strings.Split(host, ".")
+	bucket := parts[0]
+
+	// Check for region in environment variable first
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = os.Getenv("AWS_DEFAULT_REGION")
+	}
+	if region == "" {
+		region = "us-east-1"
+	}
+	
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	client := s3.NewFromConfig(cfg)
+
+	result, err := client.GetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := io.ReadAll(result.Body)
+	if err != nil {
+		result.Body.Close()
+		return nil, err
+	}
+	result.Body.Close()
+
+	resp := &http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(bytes.NewReader(body)),
+	}
+
+	return resp, nil
+}
+
+func retryableGet(urlStr string) (*http.Response, error) {
 	var err error
 	var sleepDuration time.Duration
+
+	isS3URL := strings.Contains(urlStr, "isic-storage")
 
 	for i := 0; i < NUM_RETRIES; i++ {
 		sleepDuration = time.Duration(math.Min(math.Pow(float64(2), float64(i)), float64(30))) * time.Second
 
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return nil, err
+		var resp *http.Response
+		
+		if isS3URL {
+			resp, err = getS3Object(urlStr)
+		} else {
+			req, err := http.NewRequest("GET", urlStr, nil)
+			if err != nil {
+				return nil, err
+			}
+			req.Header.Set("User-Agent", fmt.Sprintf("isic-zipstreamer/%s", getVcsRevision()))
+			resp, err = http.DefaultClient.Do(req)
 		}
-		req.Header.Set("User-Agent", fmt.Sprintf("isic-zipstreamer/%s", getVcsRevision()))
-		resp, err := http.DefaultClient.Do(req)
 
 		if err != nil {
+			if i < NUM_RETRIES-1 {
+				time.Sleep(sleepDuration)
+			}
+		} else if !isS3URL && slices.Contains(retryableStatusCodes, resp.StatusCode) {
 			time.Sleep(sleepDuration)
-		} else if slices.Contains(retryableStatusCodes, resp.StatusCode) {
-			time.Sleep(sleepDuration)
-		} else {
+		} else if resp != nil {
 			return resp, nil
 		}
 	}
