@@ -41,10 +41,15 @@ func NewServer() *Server {
 
 	sentryHandler := sentryhttp.New(sentryhttp.Options{})
 
-	r.HandleFunc("/download", server.HandlePostDownload).Methods("POST")
+	//r.HandleFunc("/download", server.HandlePostDownload).Methods("POST")
+	//r.HandleFunc("/create_download_link", server.HandleCreateLink).Methods("POST")
+	//r.HandleFunc("/download_link/{link_id}", server.HandleDownloadLink).Methods("GET")
+	/*
+		NOTE: Given that the zipstreamer server has unlimited access to private data, we have to disable every endpoint
+		that could allow users with the correct URLs to private data to exfiltrate it through the zipstreamer service.
+		This also includes modifying the server.HandleGetDownload such that it *only* supports listfile IDs, and not URLs.
+	*/
 	r.HandleFunc("/download", sentryHandler.HandleFunc(server.HandleGetDownload)).Methods("GET")
-	r.HandleFunc("/create_download_link", server.HandleCreateLink).Methods("POST")
-	r.HandleFunc("/download_link/{link_id}", server.HandleDownloadLink).Methods("GET")
 
 	return &server
 }
@@ -102,11 +107,9 @@ func (s *Server) HandlePostDownload(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) HandleGetDownload(w http.ResponseWriter, req *http.Request) {
 	params := req.URL.Query()
-	listfileUrl := params.Get("zsurl")
 	listFileId := params.Get("zsid")
-	if listfileUrl == "" && s.ListfileUrlPrefix != "" && listFileId != "" {
-		listfileUrl = s.ListfileUrlPrefix + listFileId
-	}
+	listfileUrl := s.ListfileUrlPrefix + listFileId
+
 	if listfileUrl == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(`{"status":"error","error":"invalid parameters"}`))

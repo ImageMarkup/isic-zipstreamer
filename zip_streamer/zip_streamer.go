@@ -61,7 +61,7 @@ func getS3Object(urlStr string) (*http.Response, error) {
 	// Extract bucket name from hostname (bucket.s3.region.amazonaws.com format)
 	host := parsedURL.Host
 	key := strings.TrimPrefix(parsedURL.Path, "/")
-	
+
 	parts := strings.Split(host, ".")
 	bucket := parts[0]
 
@@ -73,7 +73,7 @@ func getS3Object(urlStr string) (*http.Response, error) {
 	if region == "" {
 		region = "us-east-1"
 	}
-	
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(region),
 	)
@@ -116,7 +116,7 @@ func retryableGet(urlStr string) (*http.Response, error) {
 		sleepDuration = time.Duration(math.Min(math.Pow(float64(2), float64(i)), float64(30))) * time.Second
 
 		var resp *http.Response
-		
+
 		if isS3URL {
 			resp, err = getS3Object(urlStr)
 		} else {
